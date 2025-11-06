@@ -17,7 +17,7 @@ if os.path.exists(local_rsl_path):
 else:
     print(f"[WARNING] Local rsl_rl not found at: {local_rsl_path}")
 
-from rsl_rl.utils import wandb_fix
+#from rsl_rl.utils import wandb_fix
 import argparse
 from isaaclab.app import AppLauncher
 import cli_args

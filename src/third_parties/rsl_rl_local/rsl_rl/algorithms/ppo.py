@@ -124,6 +124,7 @@ class PPO:
         mean_value_loss = 0
         mean_surrogate_loss = 0
         mean_entropy = 0
+        mean_kl = 0
 
         # generator for mini batches
         if self.actor_critic.is_recurrent:
@@ -146,14 +147,83 @@ class PPO:
             episode_masks,
             _,  # rnd_state_batch - not used anymore
         ) in generator:
-            # TODO ----- START -----
-            # Implement the PPO update step
-            # TODO ----- END -----
+            # Normalize advantages per mini-batch if enabled
+            if self.normalize_advantage_per_mini_batch:
+                advantage_estimates = (advantage_estimates - advantage_estimates.mean()) / (advantage_estimates.std() + 1e-8)
+            
+            # Evaluate current policy on old observations and actions
+            if self.actor_critic.is_recurrent:
+                actions_log_probs, entropy, values = self.actor_critic.evaluate_recurrent(
+                    observations, critic_observations, sampled_actions, hidden_states, episode_masks
+                )
+            else:
+                actions_log_probs, entropy, values = self.actor_critic.evaluate(
+                    critic_observations, sampled_actions
+                )
+            
+            # Get current action distribution parameters
+            current_mean_actions = self.actor_critic.action_mean
+            current_action_stds = self.actor_critic.action_std
+            
+            # Compute KL divergence between old and new policy (for Gaussian distributions)
+            kl = torch.sum(
+                torch.log(current_action_stds / prev_action_stds) +
+                (prev_action_stds.pow(2) + (prev_mean_actions - current_mean_actions).pow(2)) / (2.0 * current_action_stds.pow(2)) -
+                0.5,
+                dim=-1
+            )
+            
+            # Compute policy loss (clipped surrogate objective)
+            ratio = torch.exp(actions_log_probs - prev_log_probs)
+            surr1 = ratio * advantage_estimates
+            surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * advantage_estimates
+            surrogate_loss = -torch.min(surr1, surr2).mean()
+            
+            # Compute value loss
+            if self.use_clipped_value_loss:
+                # Clipped value loss (similar to policy clipping)
+                value_pred_clipped = value_targets + torch.clamp(
+                    values - value_targets,
+                    -self.clip_param,
+                    self.clip_param
+                )
+                value_losses = (values - discounted_returns).pow(2)
+                value_losses_clipped = (value_pred_clipped - discounted_returns).pow(2)
+                value_loss = torch.max(value_losses, value_losses_clipped).mean()
+            else:
+                value_loss = (values - discounted_returns).pow(2).mean()
+            
+            # Compute total loss
+            loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy.mean()
+            
+            # Gradient descent step
+            self.optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+            self.optimizer.step()
+            
+            # Accumulate metrics
+            mean_value_loss += value_loss.item()
+            mean_surrogate_loss += surrogate_loss.item()
+            mean_entropy += entropy.mean().item()
+            mean_kl += kl.mean().item()
 
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
         mean_entropy /= num_updates
+        mean_kl /= num_updates
+        
+        # Adaptive learning rate based on KL divergence
+        if self.schedule == "adaptive":
+            if mean_kl > self.desired_kl * 2.0:
+                self.learning_rate = max(1e-5, self.learning_rate / 1.5)
+            elif mean_kl < self.desired_kl / 2.0:
+                self.learning_rate = min(1e-2, self.learning_rate * 1.5)
+            
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.learning_rate
+        
         # Clear the storage
         self.storage.clear()
 
