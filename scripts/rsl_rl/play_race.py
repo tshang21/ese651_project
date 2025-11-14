@@ -67,7 +67,7 @@ from isaaclab_rl.rsl_rl import (
 )
 
 # Import extensions to set up environment tasks
-import src.isaac_quad_sim2real.tasks   # noqa: F401
+from isaac_quad_sim2real.tasks import *  # noqa: F401
 
 def main():
     """Play with RSL-RL agent."""
@@ -147,6 +147,7 @@ def main():
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
+        print(f"[INFO]: Running environment step {timestep}")
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
@@ -163,7 +164,9 @@ def main():
                 break
 
     # close the simulator
+    print("[INFO]: Closing environment...")
     env.close()
+    print("[INFO]: Environment closed successfully")
 
 
 if __name__ == "__main__":
