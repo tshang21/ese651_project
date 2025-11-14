@@ -145,7 +145,7 @@ class PPO:
             prev_action_stds,
             hidden_states,
             episode_masks,
-            _,  # rnd_state_batch - not used anymore
+            _, 
         ) in generator:
             # Normalize advantages per mini-batch if enabled
             if self.normalize_advantage_per_mini_batch:
@@ -153,13 +153,25 @@ class PPO:
             
             # Evaluate current policy on old observations and actions
             if self.actor_critic.is_recurrent:
-                actions_log_probs, entropy, values = self.actor_critic.evaluate_recurrent(
-                    observations, critic_observations, sampled_actions, hidden_states, episode_masks
-                )
+                # For recurrent policies: process through RNN memories first
+                input_a = self.actor_critic.memory_a(observations, episode_masks, hidden_states[0])
+                input_c = self.actor_critic.memory_c(critic_observations, episode_masks, hidden_states[1])
+                # Update distribution with processed actor observations
+                self.actor_critic.update_distribution(input_a.squeeze(0))
+                # Get log probs and entropy
+                actions_log_probs = self.actor_critic.get_actions_log_prob(sampled_actions)
+                entropy = self.actor_critic.entropy
+                # Get values from critic
+                values = self.actor_critic.evaluate(input_c.squeeze(0)).squeeze(-1)
             else:
-                actions_log_probs, entropy, values = self.actor_critic.evaluate(
-                    critic_observations, sampled_actions
-                )
+                # For non-recurrent policies: evaluate directly
+                # Update distribution with actor observations
+                self.actor_critic.update_distribution(observations)
+                # Get log probs and entropy
+                actions_log_probs = self.actor_critic.get_actions_log_prob(sampled_actions)
+                entropy = self.actor_critic.entropy
+                # Get values from critic
+                values = self.actor_critic.evaluate(critic_observations).squeeze(-1)
             
             # Get current action distribution parameters
             current_mean_actions = self.actor_critic.action_mean
