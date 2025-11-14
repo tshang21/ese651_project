@@ -33,6 +33,13 @@ parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--follow_robot", type=int, default=-1, help="Follow robot index.")
 parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
 
+# add src path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+src_path = os.path.join(project_root, "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+print(f"[INFO] Added src to path: {src_path}")
+
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -67,7 +74,7 @@ from isaaclab_rl.rsl_rl import (
 )
 
 # Import extensions to set up environment tasks
-from isaac_quad_sim2real.tasks import *  # noqa: F401
+import isaac_quad_sim2real.tasks  # noqa: F401
 
 def main():
     """Play with RSL-RL agent."""

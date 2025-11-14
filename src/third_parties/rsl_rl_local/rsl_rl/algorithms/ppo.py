@@ -147,9 +147,28 @@ class PPO:
             episode_masks,
             _, 
         ) in generator:
+            # ------------------------------------------------------------------
+            # Fix shapes coming from storage:
+            # RolloutStorage stores scalars as [..., 1]. We squeeze the last dim
+            # so they match the shapes produced by the current network
+            # (e.g. values/log_probs -> [...]).
+            # Without this, PyTorch broadcasts (N,) vs (N,1) into (N,N), which
+            # severely corrupts the PPO losses.
+            # ------------------------------------------------------------------
+            if value_targets.dim() > 1 and value_targets.size(-1) == 1:
+                value_targets = value_targets.squeeze(-1)
+            if advantage_estimates.dim() > 1 and advantage_estimates.size(-1) == 1:
+                advantage_estimates = advantage_estimates.squeeze(-1)
+            if discounted_returns.dim() > 1 and discounted_returns.size(-1) == 1:
+                discounted_returns = discounted_returns.squeeze(-1)
+            if prev_log_probs.dim() > 1 and prev_log_probs.size(-1) == 1:
+                prev_log_probs = prev_log_probs.squeeze(-1)
+
             # Normalize advantages per mini-batch if enabled
             if self.normalize_advantage_per_mini_batch:
-                advantage_estimates = (advantage_estimates - advantage_estimates.mean()) / (advantage_estimates.std() + 1e-8)
+                advantage_estimates = (advantage_estimates - advantage_estimates.mean()) / (
+                    advantage_estimates.std() + 1e-8
+                )
             
             # Evaluate current policy on old observations and actions
             if self.actor_critic.is_recurrent:
