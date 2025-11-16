@@ -75,9 +75,6 @@ class DefaultQuadcopterStrategy:
 
         # TODO ----- START ----- Define the tensors required for your custom reward structure
 
-        # -------------------------------- dist_to_gate --------------------------------
-        distance_to_gate = torch.linalg.norm(self.env._pose_drone_wrt_gate, dim=1)
-
         # -------------------------------- gate_passed --------------------------------
         x_curr = self.env._pose_drone_wrt_gate[:, 0]
         x_prev = self.env._prev_x_drone_wrt_gate
@@ -97,6 +94,17 @@ class DefaultQuadcopterStrategy:
         gate_passed = crossed_plane & within_gate_opening
         ids_gate_passed = torch.where(gate_passed)[0]
         self.env._n_gates_passed[ids_gate_passed] += 1
+        # -------------------------------- dist_to_gate --------------------------------
+        self.env._idx_wp[ids_gate_passed] = (self.env._idx_wp[ids_gate_passed] + 1) % self.env._waypoints.shape[0]
+
+        # set desired positions in the world frame
+        self.env._desired_pos_w[ids_gate_passed, :2] = self.env._waypoints[self.env._idx_wp[ids_gate_passed], :2]
+        self.env._desired_pos_w[ids_gate_passed, 2] = self.env._waypoints[self.env._idx_wp[ids_gate_passed], 2]
+
+        # calculate progress via distance to goal
+        distance_to_goal = torch.linalg.norm(self.env._desired_pos_w - self.env._robot.data.root_link_pos_w, dim=1)
+        distance_to_goal = torch.tanh(distance_to_goal/3.0)
+        progress = 1 - distance_to_goal  # distance_to_goal is between 0 and 1 where 0 means the drone reached the goal
         # -------------------------------- crash detection --------------------------------
 
         # Crash detection
@@ -114,7 +122,7 @@ class DefaultQuadcopterStrategy:
         if self.cfg.is_train:
             # TODO ----- START ----- Compute per-timestep rewards by multiplying with your reward scales (in train_race.py)
             rewards = {
-                "dist_to_gate": -distance_to_gate * self.env.rew['dist_to_gate_reward_scale'],
+                "dist_to_gate": progress * self.env.rew['progress_reward_scale'],
                 "gate_passed": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
                 "crash": -crashed.float() * self.env.rew['crash_reward_scale'],
             }
