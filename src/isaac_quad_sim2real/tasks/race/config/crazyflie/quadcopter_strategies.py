@@ -74,42 +74,28 @@ class DefaultQuadcopterStrategy:
         if your PPO implementation works. You should delete it or heavily modify it once you begin the racing task."""
 
         # TODO ----- START ----- Define the tensors required for your custom reward structure
-        # Compute waypoint transitions
+
+        # -------------------------------- dist_to_gate --------------------------------
+        distance_to_gate = torch.linalg.norm(self.env._pose_drone_wrt_gate, dim=1)
+
+        # -------------------------------- gate_passed --------------------------------
         x_curr = self.env._pose_drone_wrt_gate[:, 0]
         x_prev = self.env._prev_x_drone_wrt_gate
-
-        gate_passed = (x_prev > 0) & (x_curr <= 0)
-        ids_gate_passed = torch.where(gate_passed)[0]
-
-        self.env._idx_wp[ids_gate_passed] = (self.env._idx_wp[ids_gate_passed] + 1) % self.env._waypoints.shape[0]
-        self.env._n_gates_passed[ids_gate_passed] += 1
-
-        # Set next gate target
-        self.env._desired_pos_w[ids_gate_passed] = self.env._waypoints[self.env._idx_wp[ids_gate_passed], :3]
-
-        # Distance shaping
-        distance_to_gate = torch.linalg.norm(
-            self.env._desired_pos_w - self.env._robot.data.root_link_pos_w, dim=1
-        )
-        distance_to_gate = torch.tanh(distance_to_gate / 3.0)
-        proximity = torch.clamp(1.0 - distance_to_gate, min=0.0)
-
-        # Corridor and lateral positioning
-        lateral_offset = torch.linalg.norm(self.env._pose_drone_wrt_gate[:, 1:], dim=1)
-        in_gate_opening = lateral_offset < 0.5
-
-        # Motion and forward progress
-        lin_vel_b = self.env._robot.data.root_com_lin_vel_b
-        forward_speed = torch.clamp(lin_vel_b[:, 0], min=0.0)
-
-        lin_vel_w = self.env._robot.data.root_com_lin_vel_w
-        vec = self.env._desired_pos_w - self.env._robot.data.root_link_pos_w
-        gate_dir = vec / (torch.norm(vec, dim=1, keepdim=True) + 1e-6)
-
-        # Compute forward progress only for drones that are close enough to the gate.
-        near_gate = proximity < 0.05
-        raw_forward_progress = torch.sum(gate_dir * lin_vel_w, dim=1)
-        forward_progress = torch.where(near_gate, raw_forward_progress, torch.zeros_like(raw_forward_progress))
+        # Check if drone crossed the gate plane
+        crossed_plane = (x_prev > 0) & (x_curr <= 0)
+        
+        # Get gate geometry information
+        gate_half_size = self.env._gate_model_cfg_data.gate_side / 2.0
+        # Check if y and z positions are within gate boundaries
+        y_curr = self.env._pose_drone_wrt_gate[:, 1]
+        z_curr = self.env._pose_drone_wrt_gate[:, 2]
+        within_y_bounds = torch.abs(y_curr) < gate_half_size
+        within_z_bounds = torch.abs(z_curr) < gate_half_size
+        within_gate_opening = within_y_bounds & within_z_bounds
+        
+        # Gate is only considered "passed" if drone crossed plane AND was within opening
+        gate_passed = crossed_plane & within_gate_opening
+        # -------------------------------- crash detection --------------------------------
 
         # Crash detection
         contact_forces = self.env._contact_sensor.data.net_forces_w
@@ -117,39 +103,18 @@ class DefaultQuadcopterStrategy:
 
         mask = (self.env.episode_length_buf > 100).int()
         self.env._crashed = self.env._crashed + crashed * mask
-
-
-        # Heading alignment
-        drone_quat_w = self.env._robot.data.root_quat_w
-        R = matrix_from_quat(drone_quat_w)
-        drone_forward = R[:, :, 0]
-        heading_alignment = torch.sum(gate_dir * drone_forward, dim=1)
-
-        # Gate pass validation
-        valid_gate_pass = gate_passed & (forward_speed > 0.5) & in_gate_opening
-
+        
         # Update buffers
         self.env._prev_x_drone_wrt_gate = x_curr
-        self.env._last_distance_to_goal = distance_to_gate
+
         # TODO ----- END -----
 
         if self.cfg.is_train:
             # TODO ----- START ----- Compute per-timestep rewards by multiplying with your reward scales (in train_race.py)
             rewards = {
-                # dense shaping reward for being close to the current gate
-                "proximity_goal": proximity * self.env.rew['proximity_goal_reward_scale'],
-                # bonus for successfully passing through a gate
-                "gate_pass": valid_gate_pass.float() * self.env.rew['gate_pass_reward_scale'],
-                # penalty for deviating from the gate centerline
-                "lateral_deviation": lateral_offset * self.env.rew['lateral_deviation_reward_scale'],
-                # small per-step time penalty to discourage standing still
-                "time": torch.ones(self.num_envs, device=self.device) * self.env.rew['time_reward_scale'],
-                # penalty for crashing
-                "crash": crashed * self.env.rew['crash_reward_scale'],
-                # reward for heading towards the gate
-                "heading_alignment": heading_alignment * self.env.rew['heading_alignment_reward_scale'],
-                # reward for forward progress
-                "forward_progress": forward_progress * self.env.rew['forward_progress_reward_scale'],
+                "dist_to_gate": distance_to_gate * self.env.rew['dist_to_gate_reward_scale'],
+                "gate_pass": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
+                "crash": crashed.float() * self.env.rew['crash_reward_scale'],
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             reward = torch.where(self.env.reset_terminated,
@@ -253,18 +218,7 @@ class DefaultQuadcopterStrategy:
 
         n_reset = len(env_ids)
         if n_reset == self.num_envs and self.num_envs > 1:
-            self.env.episode_length_buf = torch.randint_like(
-                self.env.episode_length_buf,
-                high=int(self.env.max_episode_length)
-            )
-            # use all envs to decide when to unlock the next gate
-            global_pass_fraction = (self.env._n_gates_passed >= 1).float().mean()
-            if global_pass_fraction > 0.6:
-                self._max_unlocked_gate = min(
-                    self._max_unlocked_gate + 1,
-                    self.env._waypoints.shape[0] - 1
-                )
-
+            self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf,high=int(self.env.max_episode_length))
 
 
         # Reset action buffers
@@ -284,20 +238,7 @@ class DefaultQuadcopterStrategy:
         default_root_state = self.env._robot.data.default_root_state[env_ids]
 
         # TODO ----- START ----- Define the initial state during training after resetting an environment.
-        # For now, always initialize the drone a fixed distance behind gate 0 during training.
-        # This focuses learning on reliably reaching and passing the first gate before tackling
-        # the full track. In play mode, we also start from gate 0 here; play-specific initial
-        # gate handling happens in the block below.
-
-        # point drone towards the chosen starting gate
-        waypoint_indices = torch.randint(
-            low=0,
-            high=self._max_unlocked_gate + 1,   # inclusive upper bound
-            size=(n_reset,),
-            device=self.device,
-            dtype=self.env._idx_wp.dtype,
-        )
-
+        waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
 
         # get starting poses behind waypoints
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]
