@@ -157,6 +157,11 @@ class OnPolicyRunner:
         start_iter = self.current_learning_iteration
         tot_iter = start_iter + num_learning_iterations
         for it in range(start_iter, tot_iter):
+            # Example of simple entropy schedule: after 1500 iterations, fix entropy_coef to 0.01
+            if it >= 3000:
+                self.alg.entropy_coef = 0.01
+            elif it >= 1500:
+                self.alg.entropy_coef = 0.02
             self.env.unwrapped.update_iteration(self.current_learning_iteration)
             start = time.time()
             # Rollout
