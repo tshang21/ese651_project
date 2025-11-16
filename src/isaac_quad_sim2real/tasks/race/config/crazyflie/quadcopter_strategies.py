@@ -104,17 +104,17 @@ class DefaultQuadcopterStrategy:
         mask = (self.env.episode_length_buf > 100).int()
         self.env._crashed = self.env._crashed + crashed * mask
         
-        # Update buffers
-        self.env._prev_x_drone_wrt_gate = x_curr
+        # Update x_prev
+        self.env._prev_x_drone_wrt_gate = self.env._pose_drone_wrt_gate[:, 0].clone()
 
         # TODO ----- END -----
 
         if self.cfg.is_train:
             # TODO ----- START ----- Compute per-timestep rewards by multiplying with your reward scales (in train_race.py)
             rewards = {
-                "dist_to_gate": distance_to_gate * self.env.rew['dist_to_gate_reward_scale'],
-                "gate_pass": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
-                "crash": crashed.float() * self.env.rew['crash_reward_scale'],
+                "dist_to_gate": -distance_to_gate * self.env.rew['dist_to_gate_reward_scale'],
+                "gate_passed": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
+                "crash": -crashed.float() * self.env.rew['crash_reward_scale'],
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             reward = torch.where(self.env.reset_terminated,
@@ -218,7 +218,17 @@ class DefaultQuadcopterStrategy:
 
         n_reset = len(env_ids)
         if n_reset == self.num_envs and self.num_envs > 1:
-            self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf,high=int(self.env.max_episode_length))
+            self.env.episode_length_buf = torch.randint_like(
+                self.env.episode_length_buf,
+                high=int(self.env.max_episode_length)
+            )
+            # use all envs to decide when to unlock the next gate
+            global_pass_fraction = (self.env._n_gates_passed >= 1).float().mean()
+            if global_pass_fraction > 0.6:
+                self._max_unlocked_gate = min(
+                    self._max_unlocked_gate + 1,
+                    self.env._waypoints.shape[0] - 1
+                )
 
 
         # Reset action buffers
@@ -238,7 +248,19 @@ class DefaultQuadcopterStrategy:
         default_root_state = self.env._robot.data.default_root_state[env_ids]
 
         # TODO ----- START ----- Define the initial state during training after resetting an environment.
-        waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
+         # For now, always initialize the drone a fixed distance behind gate 0 during training.
+        # This focuses learning on reliably reaching and passing the first gate before tackling
+        # the full track. In play mode, we also start from gate 0 here; play-specific initial
+        # gate handling happens in the block below.
+
+        # point drone towards the chosen starting gate
+        waypoint_indices = torch.randint(
+            low=0,
+            high=self._max_unlocked_gate + 1,   # inclusive upper bound
+            size=(n_reset,),
+            device=self.device,
+            dtype=self.env._idx_wp.dtype,
+        )
 
         # get starting poses behind waypoints
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]

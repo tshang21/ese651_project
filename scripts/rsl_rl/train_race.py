@@ -118,7 +118,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # TODO ----- START ----- Define rewards scales
     dist_to_gate_reward_scale     = 10.0
     gate_passed_reward_scale      = 500.0
-    crash_reward_scale            = -3.0
+    crash_reward_scale            = 3.0
     death_cost                    = -10.0
 
     rewards = {
