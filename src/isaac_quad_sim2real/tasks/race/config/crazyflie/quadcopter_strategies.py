@@ -105,7 +105,11 @@ class DefaultQuadcopterStrategy:
         lin_vel_w = self.env._robot.data.root_com_lin_vel_w
         vec = self.env._desired_pos_w - self.env._robot.data.root_link_pos_w
         gate_dir = vec / (torch.norm(vec, dim=1, keepdim=True) + 1e-6)
-        forward_progress = torch.sum(gate_dir * lin_vel_w, dim=1)
+
+        # Compute forward progress only for drones that are close enough to the gate.
+        near_gate = proximity < 0.05
+        raw_forward_progress = torch.sum(gate_dir * lin_vel_w, dim=1)
+        forward_progress = torch.where(near_gate, raw_forward_progress, torch.zeros_like(raw_forward_progress))
 
         # Crash detection
         contact_forces = self.env._contact_sensor.data.net_forces_w
@@ -137,9 +141,9 @@ class DefaultQuadcopterStrategy:
                 # bonus for successfully passing through a gate
                 "gate_pass": valid_gate_pass.float() * self.env.rew['gate_pass_reward_scale'],
                 # penalty for deviating from the gate centerline
-                "lateral_deviation": -lateral_offset * self.env.rew['lateral_deviation_reward_scale'],
+                "lateral_deviation": lateral_offset * self.env.rew['lateral_deviation_reward_scale'],
                 # small per-step time penalty to discourage standing still
-                "time": -torch.ones(self.num_envs, device=self.device) * self.env.rew['time_reward_scale'],
+                "time": torch.ones(self.num_envs, device=self.device) * self.env.rew['time_reward_scale'],
                 # penalty for crashing
                 "crash": crashed * self.env.rew['crash_reward_scale'],
                 # reward for heading towards the gate
