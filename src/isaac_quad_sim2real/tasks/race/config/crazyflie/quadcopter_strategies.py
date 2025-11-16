@@ -98,12 +98,11 @@ class DefaultQuadcopterStrategy:
         
         # -------------------------------- velocity_alignment --------------------------------
         approaching_gate = (x_prev > 0) & within_gate_opening
-        lin_vel_b = self.env._robot.data.root_com_lin_vel_b
-        forward_speed = torch.clamp(lin_vel_b[:, 0], min=0.0)
         lin_vel_w = self.env._robot.data.root_com_lin_vel_w
+        lin_vel_w = lin_vel_w / (torch.norm(lin_vel_w, dim=1, keepdim=True) + 1e-6)
         vec = self.env._desired_pos_w - self.env._robot.data.root_link_pos_w
         gate_dir = vec / (torch.norm(vec, dim=1, keepdim=True) + 1e-6)
-        velocity_alignment = torch.sum(gate_dir * lin_vel_w, dim=1)
+        velocity_alignment = torch.sum(gate_dir * lin_vel_w, dim=1) - 0.8
         velocity_alignment = torch.where(approaching_gate, velocity_alignment, torch.zeros_like(velocity_alignment))
         # -------------------------------- progress --------------------------------
         self.env._idx_wp[ids_gate_passed] = (self.env._idx_wp[ids_gate_passed] + 1) % self.env._waypoints.shape[0]
@@ -291,7 +290,7 @@ class DefaultQuadcopterStrategy:
         z_wp = self.env._waypoints[waypoint_indices][:, 2]
         
         x_local = -2.0 * torch.ones(n_reset, device=self.device)
-        x_local[waypoint_indices > 0] = -torch.rand(1, device=self.device).uniform_(0.5, 1.0)
+        x_local[waypoint_indices > 0] = -torch.rand(1, device=self.device).uniform_(0.5, 2.0)
         y_local = torch.zeros(n_reset, device=self.device)
         z_local = torch.zeros(n_reset, device=self.device)
 
