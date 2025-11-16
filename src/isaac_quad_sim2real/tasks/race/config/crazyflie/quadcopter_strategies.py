@@ -95,6 +95,8 @@ class DefaultQuadcopterStrategy:
         
         # Gate is only considered "passed" if drone crossed plane AND was within opening
         gate_passed = crossed_plane & within_gate_opening
+        ids_gate_passed = torch.where(gate_passed)[0]
+        self.env._n_gates_passed[ids_gate_passed] += 1
         # -------------------------------- crash detection --------------------------------
 
         # Crash detection
@@ -267,8 +269,9 @@ class DefaultQuadcopterStrategy:
         y0_wp = self.env._waypoints[waypoint_indices][:, 1]
         theta = self.env._waypoints[waypoint_indices][:, -1]
         z_wp = self.env._waypoints[waypoint_indices][:, 2]
-
+        
         x_local = -2.0 * torch.ones(n_reset, device=self.device)
+        x_local[waypoint_indices > 0] = -torch.rand(1, device=self.device).uniform_(0.5, 1.0)
         y_local = torch.zeros(n_reset, device=self.device)
         z_local = torch.zeros(n_reset, device=self.device)
 
