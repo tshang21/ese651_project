@@ -158,6 +158,7 @@ class DefaultQuadcopterStrategy:
                 "gate_passed": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
                 "crash": -crashed.float() * self.env.rew['crash_reward_scale'],
                 "velocity_alignment": velocity_alignment * self.env.rew['velocity_alignment_reward_scale'],
+                "time": self.env.episode_length_buf * self.env.rew['time_reward_scale'],
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             reward = torch.where(self.env.reset_terminated,
@@ -312,7 +313,7 @@ class DefaultQuadcopterStrategy:
         z_wp = self.env._waypoints[waypoint_indices][:, 2]
         
         x_local = -torch.rand(n_reset, device=self.device).uniform_(0.3, 1.0)
-        mask0 = waypoint_indices == 0``
+        mask0 = waypoint_indices == 0
         x_local[mask0] = -2.0
         mask2 = waypoint_indices == 2
         x_local[mask2] = -torch.rand(mask2.sum(), device=self.device).uniform_(0.1, 0.5)

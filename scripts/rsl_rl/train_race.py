@@ -121,6 +121,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     crash_reward_scale            = 3.0
     velocity_alignment_reward_scale = 10.0
     death_cost                    = -10.0
+    time_reward_scale             = -0.01
 
     rewards = {
         "progress_reward_scale": progress_reward_scale,
@@ -128,6 +129,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         "crash_reward_scale": crash_reward_scale,
         "velocity_alignment_reward_scale": velocity_alignment_reward_scale,
         "death_cost": death_cost,
+        "time_reward_scale": time_reward_scale,
     }
     # TODO ----- END -----
 
