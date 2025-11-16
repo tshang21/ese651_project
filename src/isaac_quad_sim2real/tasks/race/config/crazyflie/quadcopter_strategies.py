@@ -11,6 +11,7 @@ from this import d
 import torch
 import numpy as np
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from scipy.spatial.transform import Rotation
 
 from isaaclab.utils.math import subtract_frame_transforms, quat_from_euler_xyz, euler_xyz_from_quat, wrap_to_pi, matrix_from_quat
 
@@ -94,7 +95,15 @@ class DefaultQuadcopterStrategy:
         gate_passed = crossed_plane & within_gate_opening
         ids_gate_passed = torch.where(gate_passed)[0]
         self.env._n_gates_passed[ids_gate_passed] += 1
-        # -------------------------------- dist_to_gate --------------------------------
+        
+        # -------------------------------- velocity_alignment --------------------------------
+        lin_vel_b = self.env._robot.data.root_com_lin_vel_b
+        forward_speed = torch.clamp(lin_vel_b[:, 0], min=0.0)
+        lin_vel_w = self.env._robot.data.root_com_lin_vel_w
+        vec = self.env._desired_pos_w - self.env._robot.data.root_link_pos_w
+        gate_dir = vec / (torch.norm(vec, dim=1, keepdim=True) + 1e-6)
+        velocity_alignment = torch.sum(gate_dir * lin_vel_w, dim=1)
+        # -------------------------------- progress --------------------------------
         self.env._idx_wp[ids_gate_passed] = (self.env._idx_wp[ids_gate_passed] + 1) % self.env._waypoints.shape[0]
 
         # set desired positions in the world frame
@@ -122,9 +131,10 @@ class DefaultQuadcopterStrategy:
         if self.cfg.is_train:
             # TODO ----- START ----- Compute per-timestep rewards by multiplying with your reward scales (in train_race.py)
             rewards = {
-                "dist_to_gate": progress * self.env.rew['progress_reward_scale'],
+                "progress": progress * self.env.rew['progress_reward_scale'],
                 "gate_passed": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
                 "crash": -crashed.float() * self.env.rew['crash_reward_scale'],
+                "velocity_alignment": velocity_alignment * self.env.rew['velocity_alignment_reward_scale'],
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             reward = torch.where(self.env.reset_terminated,
