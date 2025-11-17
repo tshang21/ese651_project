@@ -173,6 +173,19 @@ def main():
             # Extract tensor from TensorDict for policy
             if hasattr(obs, "get"):  # Check if it's a TensorDict
                 obs = obs["policy"]  # Extract the policy observation
+            
+        # ---- NEW CODE: STOP AFTER 3 LAPS ----
+        # `env` is an `RslRlVecEnvWrapper`; its `unwrapped` attribute is already the base `QuadcopterEnv`.
+        base_env = env.unwrapped
+        num_gates = base_env._waypoints.shape[0]
+        n_passed = base_env._n_gates_passed[0].item()
+        laps_completed = n_passed // num_gates
+
+        if laps_completed >= 3:
+            print(f"[INFO] Completed 3 laps at step {timestep}")
+            break
+        # -------------------------------------
+        
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
