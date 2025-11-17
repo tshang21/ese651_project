@@ -668,7 +668,7 @@ class QuadcopterEnv(DirectRLEnv):
         # Consider adding additional _get_dones() conditions to influence training. Note that the additional conditions
         # will not be used during runtime for the official class race.
         #TODO ----- END ----- [OPTIONAL]
-
+        
         died = (
             cond_max_h
           | cond_h_min_time
@@ -677,8 +677,8 @@ class QuadcopterEnv(DirectRLEnv):
 
         # timeout conditions
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        if not self.cfg.is_train:
-            time_out = time_out | ((self._n_gates_passed - 1) // (self._waypoints.shape[0]) >= self.cfg.max_n_laps)
+        #if not self.cfg.is_train:
+        time_out = time_out | ((self._n_gates_passed - 1) // (self._waypoints.shape[0]) >= self.cfg.max_n_laps)
 
         return died, time_out
 

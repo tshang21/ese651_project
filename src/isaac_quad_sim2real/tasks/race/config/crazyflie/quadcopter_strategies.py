@@ -158,7 +158,7 @@ class DefaultQuadcopterStrategy:
                 "gate_passed": gate_passed.float() * self.env.rew['gate_passed_reward_scale'],
                 "crash": -crashed.float() * self.env.rew['crash_reward_scale'],
                 "velocity_alignment": velocity_alignment * self.env.rew['velocity_alignment_reward_scale'],
-                "time": self.env.episode_length_buf * self.env.rew['time_reward_scale'],
+                "time": torch.ones(self.num_envs, device=self.device) * self.env.rew['time_reward_scale'],
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             reward = torch.where(self.env.reset_terminated,
@@ -298,26 +298,23 @@ class DefaultQuadcopterStrategy:
         # gate handling happens in the block below.
 
         # point drone towards the chosen starting gate
-        waypoint_indices = torch.randint(
+        """waypoint_indices = torch.randint(
             low=0,
             high=self._max_unlocked_gate + 1,   # inclusive upper bound
             size=(n_reset,),
             device=self.device,
             dtype=self.env._idx_wp.dtype,
-        )
+        )"""
+        waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
 
         # get starting poses behind waypoints
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]
         y0_wp = self.env._waypoints[waypoint_indices][:, 1]
         theta = self.env._waypoints[waypoint_indices][:, -1]
         z_wp = self.env._waypoints[waypoint_indices][:, 2]
-        
-        x_local = -torch.rand(n_reset, device=self.device).uniform_(0.3, 1.0)
-        mask0 = waypoint_indices == 0
-        x_local[mask0] = -2.0
-        mask2 = waypoint_indices == 2
-        x_local[mask2] = -torch.rand(mask2.sum(), device=self.device).uniform_(0.1, 0.5)
-        y_local = torch.zeros(n_reset, device=self.device)
+
+        x_local = -torch.rand(1, device=self.device).uniform_(0.5, 3.0)
+        y_local = torch.rand(1, device=self.device).uniform_(-1.0, 1.0)
         z_local = torch.zeros(n_reset, device=self.device)
 
         # rotate local pos to global frame
