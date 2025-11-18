@@ -143,7 +143,7 @@ class DefaultQuadcopterStrategy:
         contact_forces = self.env._contact_sensor.data.net_forces_w
         crashed = (torch.norm(contact_forces, dim=-1) > 1e-8).squeeze(1).int()
 
-        mask = (self.env.episode_length_buf > 100).int()
+        mask = (self.env.episode_length_buf > 10).int()
         self.env._crashed = self.env._crashed + crashed * mask
         
         # Update x_prev

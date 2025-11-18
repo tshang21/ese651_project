@@ -239,7 +239,7 @@ class PPO:
             if mean_kl > self.desired_kl * 2.0:
                 self.learning_rate = max(1e-5, self.learning_rate / 1.5)
             elif mean_kl < self.desired_kl / 2.0:
-                self.learning_rate = min(1e-2, self.learning_rate * 1.5)
+                self.learning_rate = min(1e-4, self.learning_rate * 1.5)
             
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.learning_rate
