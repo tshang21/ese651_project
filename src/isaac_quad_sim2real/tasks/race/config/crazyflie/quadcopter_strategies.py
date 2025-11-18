@@ -331,14 +331,14 @@ class DefaultQuadcopterStrategy:
         # gate handling happens in the block below.
 
         # point drone towards the chosen starting gate
-        """waypoint_indices = torch.randint(
+        waypoint_indices = torch.randint(
             low=0,
-            high=self._max_unlocked_gate + 1,   # inclusive upper bound
+            high=6,   # inclusive upper bound
             size=(n_reset,),
             device=self.device,
             dtype=self.env._idx_wp.dtype,
-        )"""
-        waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
+        )
+        #waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
 
         # get starting poses behind waypoints
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]
@@ -346,9 +346,15 @@ class DefaultQuadcopterStrategy:
         theta = self.env._waypoints[waypoint_indices][:, -1]
         z_wp = self.env._waypoints[waypoint_indices][:, 2]
 
-        x_local = -torch.rand(1, device=self.device).uniform_(0.5, 3.0)
-        y_local = torch.rand(1, device=self.device).uniform_(-1.0, 1.0)
-        z_local = torch.zeros(n_reset, device=self.device)
+        mask0 = waypoint_indices == 0
+
+        x_local = -torch.randn(n_reset, device=self.device) * 0.625 - 1.75  # mean=-1.0, std=0.625
+        y_local = torch.randn(n_reset, device=self.device) * 0.5  # mean=0, std=0.5
+        z_local = torch.randn(n_reset, device=self.device) * 0.2 + 0.3  # mean=0.3, std=0.2
+        
+        x_local[mask0] = -torch.rand(1, device=self.device).uniform_(0.3, 3.2)
+        y_local[mask0] = torch.rand(1, device=self.device).uniform_(-1.2, 1.2)
+        z_local[mask0] = torch.zeros(1, device=self.device)
 
         # rotate local pos to global frame
         cos_theta = torch.cos(theta)
