@@ -284,38 +284,39 @@ class DefaultQuadcopterStrategy:
         self.env._previous_omega_err[env_ids] = 0.0
         self.env._omega_err_integral[env_ids] = 0.0
 
-        # ============ Domain Randomization - Per Episode ============
-        # Randomize dynamics and control parameters for each resetting environment
-        n = len(env_ids)
-        
-        # Aerodynamic drag coefficients
-        k_aero_xy_rand = torch.rand(n, device=self.device) * \
-            (self.env._k_aero_xy_max - self.env._k_aero_xy_min) + self.env._k_aero_xy_min
-        self.env._K_aero[env_ids, 0] = k_aero_xy_rand
-        self.env._K_aero[env_ids, 1] = k_aero_xy_rand  # xy use same value
-        self.env._K_aero[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._k_aero_z_max - self.env._k_aero_z_min) + self.env._k_aero_z_min
-        
-        # Thrust to weight ratio
-        self.env._thrust_to_weight[env_ids] = torch.rand(n, device=self.device) * \
-            (self.env._twr_max - self.env._twr_min) + self.env._twr_min
-        
-        # PID gains for roll and pitch
-        self.env._kp_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
-            (self.env._kp_omega_rp_max - self.env._kp_omega_rp_min) + self.env._kp_omega_rp_min)
-        self.env._ki_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
-            (self.env._ki_omega_rp_max - self.env._ki_omega_rp_min) + self.env._ki_omega_rp_min)
-        self.env._kd_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
-            (self.env._kd_omega_rp_max - self.env._kd_omega_rp_min) + self.env._kd_omega_rp_min)
-        
-        # PID gains for yaw
-        self.env._kp_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._kp_omega_y_max - self.env._kp_omega_y_min) + self.env._kp_omega_y_min
-        self.env._ki_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._ki_omega_y_max - self.env._ki_omega_y_min) + self.env._ki_omega_y_min
-        self.env._kd_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._kd_omega_y_max - self.env._kd_omega_y_min) + self.env._kd_omega_y_min
-        # ============================================================
+        if self.cfg.is_train:
+            # ============ Domain Randomization - Per Episode ============
+            # Randomize dynamics and control parameters for each resetting environment
+            n = len(env_ids)
+            
+            # Aerodynamic drag coefficients
+            k_aero_xy_rand = torch.rand(n, device=self.device) * \
+                (self.env._k_aero_xy_max - self.env._k_aero_xy_min) + self.env._k_aero_xy_min
+            self.env._K_aero[env_ids, 0] = k_aero_xy_rand
+            self.env._K_aero[env_ids, 1] = k_aero_xy_rand  # xy use same value
+            self.env._K_aero[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._k_aero_z_max - self.env._k_aero_z_min) + self.env._k_aero_z_min
+            
+            # Thrust to weight ratio
+            self.env._thrust_to_weight[env_ids] = torch.rand(n, device=self.device) * \
+                (self.env._twr_max - self.env._twr_min) + self.env._twr_min
+            
+            # PID gains for roll and pitch
+            self.env._kp_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
+                (self.env._kp_omega_rp_max - self.env._kp_omega_rp_min) + self.env._kp_omega_rp_min)
+            self.env._ki_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
+                (self.env._ki_omega_rp_max - self.env._ki_omega_rp_min) + self.env._ki_omega_rp_min)
+            self.env._kd_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
+                (self.env._kd_omega_rp_max - self.env._kd_omega_rp_min) + self.env._kd_omega_rp_min)
+            
+            # PID gains for yaw
+            self.env._kp_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._kp_omega_y_max - self.env._kp_omega_y_min) + self.env._kp_omega_y_min
+            self.env._ki_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._ki_omega_y_max - self.env._ki_omega_y_min) + self.env._ki_omega_y_min
+            self.env._kd_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._kd_omega_y_max - self.env._kd_omega_y_min) + self.env._kd_omega_y_min
+            # ============================================================
 
         # Reset joints state
         joint_pos = self.env._robot.data.default_joint_pos[env_ids]
