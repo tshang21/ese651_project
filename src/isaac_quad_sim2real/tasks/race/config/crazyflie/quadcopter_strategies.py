@@ -45,6 +45,29 @@ class DefaultQuadcopterStrategy:
                 for key in keys
             }
 
+        # Domain randomization ranges
+        # TWR
+        self.env._twr_min = self.cfg.thrust_to_weight * 0.95
+        self.env._twr_max = self.cfg.thrust_to_weight * 1.05
+        # Aerodynamics
+        self.env._k_aero_xy_min = self.cfg.k_aero_xy * 0.5
+        self.env._k_aero_xy_max = self.cfg.k_aero_xy * 2.0
+        self.env._k_aero_z_min = self.cfg.k_aero_z * 0.5
+        self.env._k_aero_z_max = self.cfg.k_aero_z * 2.0
+        # PID gains
+        self.env._kp_omega_rp_min = self.cfg.kp_omega_rp * 0.85
+        self.env._kp_omega_rp_max = self.cfg.kp_omega_rp * 1.15
+        self.env._ki_omega_rp_min = self.cfg.ki_omega_rp * 0.85
+        self.env._ki_omega_rp_max = self.cfg.ki_omega_rp * 1.15
+        self.env._kd_omega_rp_min = self.cfg.kd_omega_rp * 0.7
+        self.env._kd_omega_rp_max = self.cfg.kd_omega_rp * 1.3
+        self.env._kp_omega_y_min = self.cfg.kp_omega_y * 0.85
+        self.env._kp_omega_y_max = self.cfg.kp_omega_y * 1.15
+        self.env._ki_omega_y_min = self.cfg.ki_omega_y * 0.85
+        self.env._ki_omega_y_max = self.cfg.ki_omega_y * 1.15
+        self.env._kd_omega_y_min = self.cfg.kd_omega_y * 0.7
+        self.env._kd_omega_y_max = self.cfg.kd_omega_y * 1.3
+
         # Initialize fixed parameters once (no domain randomization)
         # These parameters remain constant throughout the simulation
         # Aerodynamic drag coefficients
@@ -113,17 +136,17 @@ class DefaultQuadcopterStrategy:
 
         # -------------------------------- progress --------------------------------
         self.env._idx_wp[ids_gate_passed] = (self.env._idx_wp[ids_gate_passed] + 1) % self.env._waypoints.shape[0]
-        # if ids_gate_passed.numel() > 0:
-        #     # recalc pose wrt new current gate
-        #     self.env._pose_drone_wrt_gate[ids_gate_passed], _ = subtract_frame_transforms(
-        #         self.env._waypoints[self.env._idx_wp[ids_gate_passed], :3],
-        #         self.env._waypoints_quat[self.env._idx_wp[ids_gate_passed], :],
-        #         self.env._robot.data.root_link_state_w[ids_gate_passed, :3]
-        #     )
+        if ids_gate_passed.numel() > 0:
+            # recalc pose wrt new current gate
+            self.env._pose_drone_wrt_gate[ids_gate_passed], _ = subtract_frame_transforms(
+                self.env._waypoints[self.env._idx_wp[ids_gate_passed], :3],
+                self.env._waypoints_quat[self.env._idx_wp[ids_gate_passed], :],
+                self.env._robot.data.root_link_state_w[ids_gate_passed, :3], self.env._robot.data.root_quat_w[ids_gate_passed, :]
+            )
 
-        #     # reset prev x for the new gate plane
-        #     self.env._prev_x_drone_wrt_gate[ids_gate_passed] = \
-        #         self.env._pose_drone_wrt_gate[ids_gate_passed, 0]
+            # reset prev x for the new gate plane
+            self.env._prev_x_drone_wrt_gate[ids_gate_passed] = \
+                self.env._pose_drone_wrt_gate[ids_gate_passed, 0].clone()
 
         # set desired positions in the world frame
         self.env._desired_pos_w[ids_gate_passed, :2] = self.env._waypoints[self.env._idx_wp[ids_gate_passed], :2]
@@ -143,7 +166,7 @@ class DefaultQuadcopterStrategy:
         contact_forces = self.env._contact_sensor.data.net_forces_w
         crashed = (torch.norm(contact_forces, dim=-1) > 1e-8).squeeze(1).int()
 
-        mask = (self.env.episode_length_buf > 10).int()
+        mask = (self.env.episode_length_buf > 3).int()
         self.env._crashed = self.env._crashed + crashed * mask
         
         # Update x_prev
@@ -284,38 +307,39 @@ class DefaultQuadcopterStrategy:
         self.env._previous_omega_err[env_ids] = 0.0
         self.env._omega_err_integral[env_ids] = 0.0
 
-        # ============ Domain Randomization - Per Episode ============
-        # Randomize dynamics and control parameters for each resetting environment
-        n = len(env_ids)
-        
-        # Aerodynamic drag coefficients
-        k_aero_xy_rand = torch.rand(n, device=self.device) * \
-            (self.env._k_aero_xy_max - self.env._k_aero_xy_min) + self.env._k_aero_xy_min
-        self.env._K_aero[env_ids, 0] = k_aero_xy_rand
-        self.env._K_aero[env_ids, 1] = k_aero_xy_rand  # xy use same value
-        self.env._K_aero[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._k_aero_z_max - self.env._k_aero_z_min) + self.env._k_aero_z_min
-        
-        # Thrust to weight ratio
-        self.env._thrust_to_weight[env_ids] = torch.rand(n, device=self.device) * \
-            (self.env._twr_max - self.env._twr_min) + self.env._twr_min
-        
-        # PID gains for roll and pitch
-        self.env._kp_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
-            (self.env._kp_omega_rp_max - self.env._kp_omega_rp_min) + self.env._kp_omega_rp_min)
-        self.env._ki_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
-            (self.env._ki_omega_rp_max - self.env._ki_omega_rp_min) + self.env._ki_omega_rp_min)
-        self.env._kd_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
-            (self.env._kd_omega_rp_max - self.env._kd_omega_rp_min) + self.env._kd_omega_rp_min)
-        
-        # PID gains for yaw
-        self.env._kp_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._kp_omega_y_max - self.env._kp_omega_y_min) + self.env._kp_omega_y_min
-        self.env._ki_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._ki_omega_y_max - self.env._ki_omega_y_min) + self.env._ki_omega_y_min
-        self.env._kd_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
-            (self.env._kd_omega_y_max - self.env._kd_omega_y_min) + self.env._kd_omega_y_min
-        # ============================================================
+        if self.cfg.is_train:
+            # ============ Domain Randomization - Per Episode ============
+            # Randomize dynamics and control parameters for each resetting environment
+            n = len(env_ids)
+            
+            # Aerodynamic drag coefficients
+            k_aero_xy_rand = torch.rand(n, device=self.device) * \
+                (self.env._k_aero_xy_max - self.env._k_aero_xy_min) + self.env._k_aero_xy_min
+            self.env._K_aero[env_ids, 0] = k_aero_xy_rand
+            self.env._K_aero[env_ids, 1] = k_aero_xy_rand  # xy use same value
+            self.env._K_aero[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._k_aero_z_max - self.env._k_aero_z_min) + self.env._k_aero_z_min
+            
+            # Thrust to weight ratio
+            self.env._thrust_to_weight[env_ids] = torch.rand(n, device=self.device) * \
+                (self.env._twr_max - self.env._twr_min) + self.env._twr_min
+            
+            # PID gains for roll and pitch
+            self.env._kp_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
+                (self.env._kp_omega_rp_max - self.env._kp_omega_rp_min) + self.env._kp_omega_rp_min)
+            self.env._ki_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
+                (self.env._ki_omega_rp_max - self.env._ki_omega_rp_min) + self.env._ki_omega_rp_min)
+            self.env._kd_omega[env_ids, :2] = (torch.rand(n, 1, device=self.device) * \
+                (self.env._kd_omega_rp_max - self.env._kd_omega_rp_min) + self.env._kd_omega_rp_min)
+            
+            # PID gains for yaw
+            self.env._kp_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._kp_omega_y_max - self.env._kp_omega_y_min) + self.env._kp_omega_y_min
+            self.env._ki_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._ki_omega_y_max - self.env._ki_omega_y_min) + self.env._ki_omega_y_min
+            self.env._kd_omega[env_ids, 2] = torch.rand(n, device=self.device) * \
+                (self.env._kd_omega_y_max - self.env._kd_omega_y_min) + self.env._kd_omega_y_min
+            # ============================================================
 
         # Reset joints state
         joint_pos = self.env._robot.data.default_joint_pos[env_ids]
@@ -331,30 +355,16 @@ class DefaultQuadcopterStrategy:
         # gate handling happens in the block below.
 
         # point drone towards the chosen starting gate
-        waypoint_indices = torch.randint(
-            low=0,
-            high=6,   # inclusive upper bound
-            size=(n_reset,),
-            device=self.device,
-            dtype=self.env._idx_wp.dtype,
-        )
-        #waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
+        waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
 
         # get starting poses behind waypoints
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]
         y0_wp = self.env._waypoints[waypoint_indices][:, 1]
         theta = self.env._waypoints[waypoint_indices][:, -1]
-        z_wp = self.env._waypoints[waypoint_indices][:, 2]
+        #z_wp = self.env._waypoints[waypoint_indices][:, 2]
 
-        mask0 = waypoint_indices == 0
-
-        x_local = -torch.randn(n_reset, device=self.device) * 0.625 - 1.75  # mean=-1.0, std=0.625
-        y_local = torch.randn(n_reset, device=self.device) * 0.5  # mean=0, std=0.5
-        z_local = torch.randn(n_reset, device=self.device) * 0.2 + 0.3  # mean=0.3, std=0.2
-        
-        x_local[mask0] = -torch.rand(1, device=self.device).uniform_(0.3, 3.2)
-        y_local[mask0] = torch.rand(1, device=self.device).uniform_(-1.2, 1.2)
-        z_local[mask0] = torch.zeros(1, device=self.device)
+        x_local = torch.empty(n_reset, device=self.device).uniform_(-3.0, -0.5)
+        y_local = torch.empty(n_reset, device=self.device).uniform_(-1.0, 1.0)
 
         # rotate local pos to global frame
         cos_theta = torch.cos(theta)
@@ -363,7 +373,8 @@ class DefaultQuadcopterStrategy:
         y_rot = sin_theta * x_local + cos_theta * y_local
         initial_x = x0_wp - x_rot
         initial_y = y0_wp - y_rot
-        initial_z = z_local + z_wp
+        #initial_z = z_local + z_wp
+        initial_z = torch.zeros(n_reset, device=self.device) + 0.05
 
         default_root_state[:, 0] = initial_x
         default_root_state[:, 1] = initial_y

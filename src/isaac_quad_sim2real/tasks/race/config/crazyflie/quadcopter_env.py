@@ -321,27 +321,6 @@ class QuadcopterEnv(DirectRLEnv):
         self._omega_err_integral = torch.zeros(self.num_envs, 3, device=self.device)
         self._thrust_to_weight = torch.zeros(self.num_envs, device=self.device)
 
-        # TWR
-        self._twr_min = self.cfg.thrust_to_weight * 0.95
-        self._twr_max = self.cfg.thrust_to_weight * 1.05
-        # Aerodynamics
-        self._k_aero_xy_min = self.cfg.k_aero_xy * 0.5
-        self._k_aero_xy_max = self.cfg.k_aero_xy * 2.0
-        self._k_aero_z_min = self.cfg.k_aero_z * 0.5
-        self._k_aero_z_max = self.cfg.k_aero_z * 2.0
-        # PID gains
-        self._kp_omega_rp_min = self.cfg.kp_omega_rp * 0.85
-        self._kp_omega_rp_max = self.cfg.kp_omega_rp * 1.15
-        self._ki_omega_rp_min = self.cfg.ki_omega_rp * 0.85
-        self._ki_omega_rp_max = self.cfg.ki_omega_rp * 1.15
-        self._kd_omega_rp_min = self.cfg.kd_omega_rp * 0.7
-        self._kd_omega_rp_max = self.cfg.kd_omega_rp * 1.3
-        self._kp_omega_y_min = self.cfg.kp_omega_y * 0.85
-        self._kp_omega_y_max = self.cfg.kp_omega_y * 1.15
-        self._ki_omega_y_min = self.cfg.ki_omega_y * 0.85
-        self._ki_omega_y_max = self.cfg.ki_omega_y * 1.15
-        self._kd_omega_y_min = self.cfg.kd_omega_y * 0.7
-        self._kd_omega_y_max = self.cfg.kd_omega_y * 1.3
         # Store fixed parameter values
         self._twr_value = self.cfg.thrust_to_weight
         self._k_aero_xy_value = self.cfg.k_aero_xy
@@ -689,7 +668,7 @@ class QuadcopterEnv(DirectRLEnv):
         # Consider adding additional _get_dones() conditions to influence training. Note that the additional conditions
         # will not be used during runtime for the official class race.
         #TODO ----- END ----- [OPTIONAL]
-        
+
         died = (
             cond_max_h
           | cond_h_min_time
@@ -698,8 +677,8 @@ class QuadcopterEnv(DirectRLEnv):
 
         # timeout conditions
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        #if not self.cfg.is_train:
-        time_out = time_out | ((self._n_gates_passed - 1) // (self._waypoints.shape[0]) >= self.cfg.max_n_laps)
+        if not self.cfg.is_train:
+            time_out = time_out | ((self._n_gates_passed - 1) // (self._waypoints.shape[0]) >= self.cfg.max_n_laps)
 
         return died, time_out
 
@@ -718,3 +697,4 @@ class QuadcopterEnv(DirectRLEnv):
     def _get_observations(self) -> dict:
         """Get observations using the strategy pattern."""
         return self.strategy.get_observations()
+        
