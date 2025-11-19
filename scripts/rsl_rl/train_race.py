@@ -29,7 +29,7 @@ parser.add_argument("--video_length", type=int, default=200, help="Length of the
 parser.add_argument("--video_interval", type=int, default=2000, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
+parser.add_argument("--seed", type=int, default=-1, help="Seed used for the environment (-1 for random seed)")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 
 # add src path
@@ -117,7 +117,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # TODO ----- START ----- Define rewards scales
     progress_reward_scale         = 100.0 
-    gate_passed_reward_scale      = 1000.0
+    gate_passed_reward_scale      = 3000.0
     crash_reward_scale            = 100.0
     velocity_alignment_reward_scale = 10.0
     death_cost                    = -50.0

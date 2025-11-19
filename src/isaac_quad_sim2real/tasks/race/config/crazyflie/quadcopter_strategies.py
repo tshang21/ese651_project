@@ -331,14 +331,14 @@ class DefaultQuadcopterStrategy:
         # gate handling happens in the block below.
 
         # point drone towards the chosen starting gate
-        waypoint_indices = torch.randint(
+        """waypoint_indices = torch.randint(
             low=0,
             high=6,   # inclusive upper bound
             size=(n_reset,),
             device=self.device,
             dtype=self.env._idx_wp.dtype,
-        )
-        #waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
+        )"""
+        waypoint_indices = torch.zeros(n_reset, device=self.device, dtype=self.env._idx_wp.dtype)
 
         # get starting poses behind waypoints
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]
@@ -346,7 +346,7 @@ class DefaultQuadcopterStrategy:
         theta = self.env._waypoints[waypoint_indices][:, -1]
         z_wp = self.env._waypoints[waypoint_indices][:, 2]
 
-        mask0 = waypoint_indices == 0
+        """mask0 = waypoint_indices == 0
 
         x_local = -torch.randn(n_reset, device=self.device) * 0.625 - 1.75  # mean=-1.0, std=0.625
         y_local = torch.randn(n_reset, device=self.device) * 0.5  # mean=0, std=0.5
@@ -354,7 +354,13 @@ class DefaultQuadcopterStrategy:
         
         x_local[mask0] = -torch.rand(1, device=self.device).uniform_(0.3, 3.2)
         y_local[mask0] = torch.rand(1, device=self.device).uniform_(-1.2, 1.2)
-        z_local[mask0] = torch.zeros(1, device=self.device)
+        z_local[mask0] = torch.zeros(1, device=self.device)"""
+
+        #x_local = -torch.rand(n_reset, device=self.device).uniform_(0.5, 3.0)
+        #y_local = torch.rand(n_reset, device=self.device).uniform_(-1.0, 1.0)
+
+        x_local = torch.empty(1, device=self.device).uniform_(-1.55, -1.35)
+        y_local = torch.empty(1, device=self.device).uniform_(-0.1, 0.1)
 
         # rotate local pos to global frame
         cos_theta = torch.cos(theta)
@@ -363,7 +369,7 @@ class DefaultQuadcopterStrategy:
         y_rot = sin_theta * x_local + cos_theta * y_local
         initial_x = x0_wp - x_rot
         initial_y = y0_wp - y_rot
-        initial_z = z_local + z_wp
+        initial_z = torch.full((n_reset,), 0.05, device=self.device)  # Fixed at 0.05m above ground
 
         default_root_state[:, 0] = initial_x
         default_root_state[:, 1] = initial_y
@@ -385,8 +391,11 @@ class DefaultQuadcopterStrategy:
         # Handle play mode initial position
         if not self.cfg.is_train:
             # x_local and y_local are randomly sampled
-            x_local = torch.empty(1, device=self.device).uniform_(-3.0, -0.5)
-            y_local = torch.empty(1, device=self.device).uniform_(-1.0, 1.0)
+            #x_local = torch.empty(1, device=self.device).uniform_(-3.0, -0.5)
+            #y_local = torch.empty(1, device=self.device).uniform_(-1.0, 1.0)
+
+            x_local = torch.empty(1, device=self.device).uniform_(-1.55, -1.35)
+            y_local = torch.empty(1, device=self.device).uniform_(-0.1, 0.1)
 
             x0_wp = self.env._waypoints[self.env._initial_wp, 0]
             y0_wp = self.env._waypoints[self.env._initial_wp, 1]
