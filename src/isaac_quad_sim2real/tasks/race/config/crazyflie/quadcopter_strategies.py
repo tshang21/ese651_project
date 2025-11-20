@@ -131,7 +131,7 @@ class DefaultQuadcopterStrategy:
         vel_along_pos = torch.clamp(vel_along, min=0.0)
 
         # Bound the shaping term to avoid it dominating other rewards
-        velocity_alignment = torch.clamp(vel_along_pos, max=2.0)
+        velocity_alignment = torch.clamp(vel_along_pos, max=20.0) # increase from 2.0 after run 163
         velocity_alignment = torch.where(approaching_gate, velocity_alignment, torch.zeros_like(velocity_alignment))
 
         # -------------------------------- progress --------------------------------
@@ -172,6 +172,10 @@ class DefaultQuadcopterStrategy:
         # Update x_prev
         self.env._prev_x_drone_wrt_gate = self.env._pose_drone_wrt_gate[:, 0].clone()
 
+        # -------------------------------- speed --------------------------------
+        speed = torch.norm(self.env._robot.data.root_com_lin_vel_w, dim=1)
+        speed_reward = torch.clamp(speed, max=20.0)
+
         # TODO ----- END -----
 
         if self.cfg.is_train:
@@ -182,6 +186,7 @@ class DefaultQuadcopterStrategy:
                 "crash": -crashed.float() * self.env.rew['crash_reward_scale'],
                 "velocity_alignment": velocity_alignment * self.env.rew['velocity_alignment_reward_scale'],
                 "time": torch.ones(self.num_envs, device=self.device) * self.env.rew['time_reward_scale'],
+                "speed": speed_reward * self.env.rew['speed_reward_scale'],
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             reward = torch.where(self.env.reset_terminated,

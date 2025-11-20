@@ -319,18 +319,18 @@ class QuadcopterEnv(DirectRLEnv):
         self._kd_omega = torch.zeros(self.num_envs, 3, device=self.device)
         self._tau_m = torch.zeros(self.num_envs, 4, device=self.device)
         self._omega_err_integral = torch.zeros(self.num_envs, 3, device=self.device)
-        self._thrust_to_weight = torch.zeros(self.num_envs, device=self.device)
+        self._thrust_to_weight = torch.zeros(self.num_envs, device=self.device)*1.03
 
         # Store fixed parameter values
         self._twr_value = self.cfg.thrust_to_weight
-        self._k_aero_xy_value = self.cfg.k_aero_xy
-        self._k_aero_z_value = self.cfg.k_aero_z
-        self._kp_omega_rp_value = self.cfg.kp_omega_rp
-        self._ki_omega_rp_value = self.cfg.ki_omega_rp
-        self._kd_omega_rp_value = self.cfg.kd_omega_rp
-        self._kp_omega_y_value = self.cfg.kp_omega_y
-        self._ki_omega_y_value = self.cfg.ki_omega_y
-        self._kd_omega_y_value = self.cfg.kd_omega_y
+        self._k_aero_xy_value = self.cfg.k_aero_xy*0.6
+        self._k_aero_z_value = self.cfg.k_aero_z*1.8
+        self._kp_omega_rp_value = self.cfg.kp_omega_rp*1.1
+        self._ki_omega_rp_value = self.cfg.ki_omega_rp*0.93
+        self._kd_omega_rp_value = self.cfg.kd_omega_rp*1.2
+        self._kp_omega_y_value = self.cfg.kp_omega_y*1.13
+        self._ki_omega_y_value = self.cfg.ki_omega_y*0.87
+        self._kd_omega_y_value = self.cfg.kd_omega_y*0.75
         self._tau_m_value = self.cfg.tau_m
 
         # Initialize the strategy for rewards, observations, and resets
