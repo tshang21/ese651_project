@@ -131,7 +131,7 @@ class DefaultQuadcopterStrategy:
         vel_along_pos = torch.clamp(vel_along, min=0.0)
 
         # Bound the shaping term to avoid it dominating other rewards
-        velocity_alignment = torch.clamp(vel_along_pos, max=20.0) # increase from 2.0 after run 163
+        velocity_alignment = torch.clamp(vel_along_pos, max=30.0) # increase from 2.0 after run 163
         velocity_alignment = torch.where(approaching_gate, velocity_alignment, torch.zeros_like(velocity_alignment))
 
         # -------------------------------- progress --------------------------------
@@ -174,7 +174,7 @@ class DefaultQuadcopterStrategy:
 
         # -------------------------------- speed --------------------------------
         speed = torch.norm(self.env._robot.data.root_com_lin_vel_w, dim=1)
-        speed_reward = torch.clamp(speed, max=20.0)
+        speed_reward = torch.clamp(speed, max=30.0)
 
         # TODO ----- END -----
 
@@ -296,7 +296,7 @@ class DefaultQuadcopterStrategy:
             )
             # use all envs to decide when to unlock the next gate
             global_pass_fraction = (self.env._n_gates_passed >= 1).float().mean()
-            if global_pass_fraction > 0.25:
+            if global_pass_fraction > 0.6:
                 self._max_unlocked_gate = min(
                     self._max_unlocked_gate + 1,
                     self.env._waypoints.shape[0] - 1
