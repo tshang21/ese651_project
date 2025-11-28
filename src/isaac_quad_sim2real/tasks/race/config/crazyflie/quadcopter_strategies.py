@@ -397,11 +397,11 @@ class DefaultQuadcopterStrategy:
         x0_wp = self.env._waypoints[waypoint_indices][:, 0]
         y0_wp = self.env._waypoints[waypoint_indices][:, 1]
         theta = self.env._waypoints[waypoint_indices][:, -1]
-        z_wp = self.env._waypoints[waypoint_indices][:, 2]
+        #z_wp = self.env._waypoints[waypoint_indices][:, 2]
 
         x_local = torch.empty(n_reset, device=self.device).uniform_(-3.0, -0.5)
         y_local = torch.empty(n_reset, device=self.device).uniform_(-1.0, 1.0)
-        z_local = torch.empty(n_reset, device=self.device).uniform_(-0.75, -0.74)
+        #z_local = torch.empty(n_reset, device=self.device).uniform_(-0.75, 0.75)
 
         # rotate local pos to global frame
         cos_theta = torch.cos(theta)
@@ -410,8 +410,14 @@ class DefaultQuadcopterStrategy:
         y_rot = sin_theta * x_local + cos_theta * y_local
         initial_x = x0_wp - x_rot
         initial_y = y0_wp - y_rot
-        initial_z = z_local + z_wp
-        #initial_z = torch.zeros(n_reset, device=self.device)
+        # For gate 0, z should be 0-0.10 above ground (absolute), not relative to gate
+        # For other gates, z is relative to the gate
+        """initial_z = torch.where(
+            waypoint_indices == 0,
+            torch.zeros(n_reset, device=self.device),
+            z_local + z_wp
+        )"""
+        initial_z = torch.zeros(n_reset, device=self.device)
 
         default_root_state[:, 0] = initial_x
         default_root_state[:, 1] = initial_y
@@ -427,6 +433,8 @@ class DefaultQuadcopterStrategy:
             yaw
         )
         default_root_state[:, 3:7] = quat
+
+        default_root_state[:, 7:] = 0.0 # reset linear and angular velocities
 
         # TODO ----- END -----
 
